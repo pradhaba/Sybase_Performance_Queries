@@ -1,3 +1,7 @@
+1. General Sizing Rules of Thumb
+Standard Recommendation: Most Sybase experts recommend sizing tempdb at 10% to 25% of your total user database size. For a 1.5 TB database, this equates to 150 GB – 375 GB.
+Conservative Starting Point: Some SAP/Sybase help guides suggest a more modest starting point of roughly 6-7% for initial setups. For 1.5 TB, this would be approximately 100 GB. 
+
 -- Identify sessions consuming tempdb space
 select spid, loggedindatetime, (@@maxpagesize * convert(int, pssinfo(spid, "tempdb_pages"))) / 1024 as USAGE_IN_KB
 from master..sysprocesses where convert(int, pssinfo(spid, "tempdb_pages")) > 0 order by USAGE_IN_KB desc
@@ -15,3 +19,33 @@ go
     3     NULL             NULL
     4     NULL             NULL
 ===================================================================================================================
+-- Shows all login and application bindings currently in effect
+exec sp_tempdb "show", "login"
+go
+
+-- Shows which databases belong to which groups
+exec sp_tempdb "show", "db"
+go
+exec sp_tempdb "create", "tempdb_heavy_group"
+go
+exec sp_tempdb "add", "tempdb_2", "tempdb_heavy_group"
+go
+-- Binds the login 'reports_user' to the 'tempdb_heavy_group'
+exec sp_tempdb "bind", "LG", "reports_user", "GR", "tempdb_heavy_group"
+go
+-- Binds 'sa' to a specific 'admin_tempdb'
+exec sp_tempdb "bind", "LG", "sa", "DB", "admin_tempdb"
+go
+exec sp_tempdb "bind", "AP", "my_web_app", "GR", "default"
+go
+exec sp_tempdb "unbind", "LG", "reports_user"
+go
+-- Abort Log-Suspended Sessions: If tempdb is completely stuck because the log is full (Error 1105), you can use the lct_admin function to kill sessions specifically waiting on log space:
+-- Use dbid 2 for the system tempdb
+select lct_admin("abort", 0, 2)
+go
+-- Monitor tempdb (replace 'tempdb' with your specific tempdb name if using multiple)
+exec sp_object_stats "00:01:00", "tempdb"
+go
+
+========================================================================================================================
