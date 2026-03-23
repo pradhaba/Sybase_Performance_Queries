@@ -6,10 +6,67 @@ The optimizer uses histograms to estimate rows; if these are stale, it may choos
 How to Identify if it's a "Stats Issue"
 1.Check the Query Plan: Use set showplan on or dbcc traceon(3604, 310). Look for the "estimated rows" vs. "actual rows." If the optimizer expects 1 row but receives 1,000,000, your statistics are likely stale.
 2.Check for "Data Change": Use the datachange() function to see what percentage of data has changed since the last update. High drift (>10-20%) usually justifies an update.
+  -- Returns the % of data that has changed since the last stats update
+  select datachange("my_table", null, "my_column")
+  go
 3.Optdiag Utility: Use the standalone optdig tool to dump statistics to a text file. Look for "out of range" values if your queries use recent dates or high IDs that aren't in the current histogram. 
 Running a full update statistics on a 1.5 TB database during peak hours can be dangerous. Use these strategies to minimize impact:
 Use Hashing (ASE 15.7+): Replace the traditional sort-based method with hashing. It reduces the need for expensive tempdb sorts and extra scans.
   update statistics <table_name> with hashing
+  go
+Sampling: Instead of scanning every row, use sampling to build a "good enough" histogram quickly.
   -- Samples only 10% of the table rows
   update statistics <table_name> with sampling = 10 percent
+  go
+Target Only Leading Columns: Use update index statistics rather than update all statistics. 
+Updating only the leading column of an index is much faster because it only requires a leaf-level scan of the index, not a full table scan.
 
+1. What are Consumers? (with consumers = N)
+When you run update statistics, Sybase often needs to sort the data to determine the distribution of values.
+The "Worker" Analogy: Think of "consumers" as extra sets of hands. If you set consumers = 4, Sybase spawns 4 parallel worker processes (threads) to sort the data simultaneously.
+The Speed Gap: Without consumers, a 1.5 TB table sort is serial (one CPU). With consumers, it can be 4x to 8x faster, depending on your CPU engines.
+The TempDB Catch: Parallel sorting happens in tempdb. If you have 8 consumers, they will all be writing to tempdb at once. This is why having multiple tempdb files (as we discussed earlier) is critical; otherwise, your parallel workers will just sit there fighting for the same tempdb page.
+The Command:
+sql
+update statistics my_huge_table with consumers = 4, hashing
+go
+2. What is a Histogram?
+A histogram is a small map (stored in sysstatistics) that tells the Optimizer what the data inside a column looks like without the Optimizer having to read the whole table.
+Imagine a Users table with 1 million rows:
+Without a Histogram: The Optimizer guesses. It might assume 50% are "Active" and 50% are "Inactive."
+With a Histogram: It knows exactly that 99% are "Active" and 1% are "Inactive."
+How it's structured:
+A histogram is divided into steps (usually 20 to 250). Each step contains:
+Cell Value: A specific data point (e.g., "Date: 2023-01-01").
+Frequency: How many rows match that exact value.
+In Sybase ASE, a full index scan (instead of a "positioning by key" seek) means the optimizer has decided to read every page of the index sequentially rather than jumping directly to the relevant data. 
+Why is it scanning instead of seeking?
+Even if the query uses an index, it might scan for several reasons:
+Low Selectivity: If your query returns a high percentage (e.g., >20%) of the total rows, the optimizer often finds it cheaper to read the index sequentially than to perform thousands of random "seeks" into the B-tree.
+Outdated Statistics: The optimizer may believe the table is small or that the criteria will return many rows because the distribution histograms are old.
+Non-SARGable Predicates: If you use functions on the indexed column (e.g., WHERE SUBSTRING(col,1,3) = 'ABC') or mismatching data types, the engine cannot "seek" and must scan the index to evaluate the condition for every row.
+Leading Column Missing: If you have a composite index on (A, B, C) but your WHERE clause only filters on B, the engine can still use the index (it's smaller than the table), but it must scan it because it cannot use A to navigate the tree.
+Parameter Sniffing/Variables: Using local variables (e.g., WHERE col = @val) can sometimes prevent the optimizer from knowing the specific value at compile time, leading it to fall back on a "safe" scan plan. 
+How to Overcome This
+Update Statistics:
+  Run UPDATE STATISTICS on the table and specific index to ensure the optimizer has an accurate row count and distribution map.
+Verify SARGability:
+  Remove functions or calculations from the WHERE clause.
+  Bad: WHERE dateadd(dd, 1, mydate) > getdate()
+  Good: WHERE mydate > dateadd(dd, -1, getdate())
+Use Index Hints:
+  Force a specific index to see if performance actually improves (sometimes the scan is faster).
+  sql
+  SELECT * FROM my_table (INDEX my_index_name) WHERE col = 'value'
+Check Search Arguments (SARGs):
+  Use SET SHOWPLAN ON and look for the message "Keys are". If you don't see your column listed under "Keys are", the optimizer is not using that column for a seek.
+
+systabstats vs. sysstatistics
+Feature	systabstats	sysstatistics
+Content	Table/Index Metadata: Row counts, page counts, cluster ratios, and I/O costs ----- Column Distribution: Histograms, density values, and frequency of specific data values.
+Granularity	Table or Index level ----- Column or Composite Column level.
+Purpose	Helps the optimizer decide between a Table Scan and an Index Scan ------ Helps the optimizer estimate how many rows a WHERE clause will return (Selectivity).
+Updated by	update statistics, update index statistics, and dataserver (periodically) -----	update statistics, update index statistics, and update all statistics.
+1> select * from systabstats where 1=2
+2> go
+ indid  id  activestatid indexheight leafcnt pagecnt rowcnt forwrowcnt  delrowcnt  dpagecrcnt  ipagecrcnt drowcrcnt oamapgcnt extent0pgcnt datarowsize leafrowsize status plljoindegree rslastoam   rslastpage  frlastoam   frlastpage  conopt_thld plldegree emptypgcnt partitionid warmcachepgcnt statmoddate  unusedpgcnt oampagecnt pioclmdata  pioclmindex  piocsmdata   piocsmindex
