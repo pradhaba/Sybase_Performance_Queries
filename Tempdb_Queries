@@ -1,0 +1,17 @@
+-- Identify sessions consuming tempdb space
+select spid, loggedindatetime, (@@maxpagesize * convert(int, pssinfo(spid, "tempdb_pages"))) / 1024 as USAGE_IN_KB
+from master..sysprocesses where convert(int, pssinfo(spid, "tempdb_pages")) > 0 order by USAGE_IN_KB desc
+go
+Output:
+ spid   loggedindatetime                USAGE_IN_KB
+ ------ ------------------------------- -----------
+     19             Mar 23 2026  7:12PM          10
+===================================================================================================================
+-- Shows all active sessions (spids) assigned to 'tempdb_2'
+exec sp_tempdb "who", "tempdb_2"
+go
+ spid     loginame         application
+ -------- ---------------- ----------------------
+    3     NULL             NULL
+    4     NULL             NULL
+===================================================================================================================
