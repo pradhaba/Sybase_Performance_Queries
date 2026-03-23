@@ -47,5 +47,7 @@ go
 -- Monitor tempdb (replace 'tempdb' with your specific tempdb name if using multiple)
 exec sp_object_stats "00:01:00", "tempdb"
 go
+-- Get the long running query details in tempdb.
+SELECT spid, dbname(dbid) AS db_name, starttime FROM master..syslogshold WHERE dbid = db_id("tempdb");
 
 ========================================================================================================================
