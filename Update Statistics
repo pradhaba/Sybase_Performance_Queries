@@ -1,0 +1,15 @@
+Update statistics
+===============================================================================================
+Condition:
+In Sybase ASE, performance issues related to statistics often manifest as "sudden" query slowdowns even when no code has changed. 
+The optimizer uses histograms to estimate rows; if these are stale, it may choose a full table scan instead of a covering index.
+How to Identify if it's a "Stats Issue"
+1.Check the Query Plan: Use set showplan on or dbcc traceon(3604, 310). Look for the "estimated rows" vs. "actual rows." If the optimizer expects 1 row but receives 1,000,000, your statistics are likely stale.
+2.Check for "Data Change": Use the datachange() function to see what percentage of data has changed since the last update. High drift (>10-20%) usually justifies an update.
+3.Optdiag Utility: Use the standalone optdig tool to dump statistics to a text file. Look for "out of range" values if your queries use recent dates or high IDs that aren't in the current histogram. 
+Running a full update statistics on a 1.5 TB database during peak hours can be dangerous. Use these strategies to minimize impact:
+Use Hashing (ASE 15.7+): Replace the traditional sort-based method with hashing. It reduces the need for expensive tempdb sorts and extra scans.
+  update statistics <table_name> with hashing
+  -- Samples only 10% of the table rows
+  update statistics <table_name> with sampling = 10 percent
+
