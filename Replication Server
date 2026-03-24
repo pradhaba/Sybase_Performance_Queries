@@ -1,0 +1,99 @@
+Pre-requisite:
+
+Sybase Primary server.database:PROD_ASE.DB (version 15.7)
+Sybase Seconday server.database:DR_ASE.DB (version 15.7)
+Replication Server:PROD_RS (version 15.7)
+High Level steps:
+
+Step 1: Ensure maintenance login is already created and has replication role on primary and standby database. If not, follow below steps to create on primary/standby database
+Login to Primary server PROD_ASE
+1>sp_addlogin DB_maint,DB_maint_ps,DB
+2> go
+1> use DB
+2> go
+1> sp_addalias DB_maint,dbo
+2> go
+1> grant role replication_role to DB_maint
+2> go
+
+Login to Secondary server DR_ASE
+1>sp_addlogin DB_maint,DB_maint_ps,DB
+2> go
+1> use DB
+2> go
+1> sp_addalias DB_maint,dbo
+2> go
+1> grant role replication_role to DB_maint
+2> go
+
+Step 2: enable “rep agent threads” on primary and standby database.
+      Login to Primary server PROD_ASE
+      sp_configure ‘enable rep agent’,1
+      go
+      Login to Secondary server DR_ASE
+      sp_configure ‘enable rep agent’,1
+      go
+
+Step 3: Create Logical connection.
+      Run below command on replication server PROD_RS:
+      create logical connection to LS_PROD_ASE.LD_DB
+Step 4: Install system replication tables.
+      We need to install some system tables and procedures which are required for proper functioning of replication.
+      Login to Replication server PROD_RS host and you will get the script “rs_install_primary.sql” under  $SYBASE/$SYBASE_REP/scripts/
+      Run this replication script on Primary server.database as shown below
+
+[sybase@unix scripts]$ isql -Usa -SPROD_ASE –i rs_install_primary.sql –o rs_install_primary.sql.out -DDB
+
+Step 5: Create Active connection. Run this on replication server PROD_RS
+    create connection to PROD_ASE.DB
+    set error class to rs_sqlserver_error_class
+    set function string class to rs_sqlserver_function_class
+    set username to DB_maint
+    set password to DB_maint_ps
+    with log transfer on
+    as active for LS_PROD_ASE.LD_DB
+
+Step 6: Configure Rep agent. Run this on primary database
+use DB
+go
+sp_config_rep_agent DB, ‘enable’,PROD_RS,PROD_RS_ra,PROD_RS_ra_ps
+go
+sp_config_rep_agent DB, “send warm standby xacts”, true
+go
+sp_setreplicate rs_marker,”true”
+go
+sp_setreplicate rs_update_lastcommit,”true”
+go
+sp_start_rep_agent DB
+go
+
+Step 7: Create Standby connection. Run this on replication server PROD_RS
+create connection to DR_ASE.DB
+set error class to rs_sqlserver_error_class
+set function string class to rs_sqlserver_function_class
+set username DB_maint
+set password to DB_maint_ps
+with log transfer on
+as standby for LS_PROD_ASE.LD_DB
+use dump marker
+go
+
+Step 8: Enable Rep to Standby setting on primary database
+grant execute on rs_update_lastcommit to public
+grant execute on rs_marker to public
+grant execute on rs_check_repl_stat to public
+go
+sp_reptostandby “DB”, “all”
+
+Step 9: Dump primary  database
+Step 10: Load standby database
+Step 11: Bring up the replication thread.
+Step 12: Disable triggers at the standby database to avoid duplicate key thread down error.
+alter connection to DR_ASE.DB set ‘dsi_keep_triggers’ to ‘off’
+
+Step 13: Now, finally check the replication status and it should be Active/Active.
+Run this on replication server PROD_RS
+
+admin logical_status,LS_PROD_ASE.LD_DB
+
+Step 14: Test Replication
