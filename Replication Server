@@ -42,7 +42,7 @@ Step 4: Install system replication tables.
       Login to Replication server PROD_RS host and you will get the script “rs_install_primary.sql” under  $SYBASE/$SYBASE_REP/scripts/
       Run this replication script on Primary server.database as shown below
 
-[sybase@unix scripts]$ isql -Usa -SPROD_ASE –i rs_install_primary.sql –o rs_install_primary.sql.out -DDB
+      [sybase@unix scripts]$ isql -Usa -SPROD_ASE –i rs_install_primary.sql –o rs_install_primary.sql.out -DDB
 
 Step 5: Create Active connection. Run this on replication server PROD_RS
     create connection to PROD_ASE.DB
@@ -54,18 +54,18 @@ Step 5: Create Active connection. Run this on replication server PROD_RS
     as active for LS_PROD_ASE.LD_DB
 
 Step 6: Configure Rep agent. Run this on primary database
-use DB
-go
-sp_config_rep_agent DB, ‘enable’,PROD_RS,PROD_RS_ra,PROD_RS_ra_ps
-go
-sp_config_rep_agent DB, “send warm standby xacts”, true
-go
-sp_setreplicate rs_marker,”true”
-go
-sp_setreplicate rs_update_lastcommit,”true”
-go
-sp_start_rep_agent DB
-go
+      use DB
+      go
+      sp_config_rep_agent DB, ‘enable’,PROD_RS,PROD_RS_ra,PROD_RS_ra_ps
+      go
+      sp_config_rep_agent DB, “send warm standby xacts”, true
+      go
+      sp_setreplicate rs_marker,”true”
+      go
+      sp_setreplicate rs_update_lastcommit,”true”
+      go
+      sp_start_rep_agent DB
+      go
 
 Step 7: Create Standby connection. Run this on replication server PROD_RS
 create connection to DR_ASE.DB
@@ -79,21 +79,17 @@ use dump marker
 go
 
 Step 8: Enable Rep to Standby setting on primary database
-grant execute on rs_update_lastcommit to public
-grant execute on rs_marker to public
-grant execute on rs_check_repl_stat to public
-go
-sp_reptostandby “DB”, “all”
-
+      grant execute on rs_update_lastcommit to public
+      grant execute on rs_marker to public
+      grant execute on rs_check_repl_stat to public
+      go
+      sp_reptostandby “DB”, “all”
 Step 9: Dump primary  database
 Step 10: Load standby database
 Step 11: Bring up the replication thread.
 Step 12: Disable triggers at the standby database to avoid duplicate key thread down error.
-alter connection to DR_ASE.DB set ‘dsi_keep_triggers’ to ‘off’
-
+      alter connection to DR_ASE.DB set ‘dsi_keep_triggers’ to ‘off’
 Step 13: Now, finally check the replication status and it should be Active/Active.
-Run this on replication server PROD_RS
-
-admin logical_status,LS_PROD_ASE.LD_DB
-
+      Run this on replication server PROD_RS
+      admin logical_status,LS_PROD_ASE.LD_DB
 Step 14: Test Replication
