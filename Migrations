@@ -1,0 +1,88 @@
+Upgrades and Migrations in SYBASE ASE
+Upgrades of sybase ase can be done in-place and side-by-side.
+In-Place upgrades and patching Steps:
+Sybase upgrades
+In Sybase we can do upgrades at two levels .
+Minor upgrade ex: – upgrading Sybase server to ASE 15.0.3 ESD #1 to ESD #4
+Major upgrade eg: – Upgrading Sybase server ASE 12.5 to ASE 15.0.3 / 15.5
+Minor Patch upgrades:  we have two methods to do this minor patching .
+
+First Method :
+1) Download the EBF binary that we need to apply from SAP Sybase downloads, copy that to the host and Untar it in a Separate location.
+2) Take backup of Sybase home ( this would be useful when incase patch fails and we need to rollback.
+3) Take backup of all system and user databases
+4) Shutdown Backup and ASE server
+5) Now run the setup -i console from the untared binary which would prompt for the Sybase home directory and this would overwrite the existing directory and applies the patch. By this step we can say applying patch to the existing verion is completed
+6) when you Bring up the Sybase server . Sybase server upgrades all the databases to latest patch level. This we can see by tailing the error .
+7) Once the server is up – execute installmaster,installcommit and instmsgs.ebf.
+
+Second Method :
+1) Make backup copies of interfaces, runserverfile of both ASE and backup server , config file .
+2) take backups of all system and user databases .
+3) In this method instead of downloading ebf binary patch . we would get the pre-installed Full version of binary that we are targetting to install
+4) copy that full version directory to the location where we have old directory , copy interfaces, runserverfiles and config files to the new directory and start the server . while server comes up it will upgrae the system and userdatabases to new ebf .
+5) login to the server and if you see select @@version will show the new ebf .
+6) Once the server is up – execute installmaster,installcommit and instmsgs.ebf.
+
+Sybase Major upgrades :
+Sybase Major or version upgrades , we can perform this in two ways
+1) inplace upgrade
+2) dump & load method
+In the current environment we always prefer to do the dump & load method only as it will complete with less errors compared to inplace .
+
+Dump and load method is very simple
+1) take the backups of all system and user databases
+2) shutdown the old server .
+3) Build a new instance with new version of binaries, copy the interfaces, configfile
+4) sync the logins from old server to new
+5) create Sybase devices , create databases, load them with the backups we have ,
+6) For configuration changes , use the unix command diff of old conf and new conf and according the prepare the configuration file and reboot ase with it .
+=============================================================================================================================================
+Cross-Platform Migration of SYBASE ASE from AIX to Liux:
+Step-by-Step Migration (XPDL Method)
+1. Preparation on AIX (Source)
+  Quiesce the Database: Ensure no transactions and application connections are active to maintain data integrity.
+  Single-User Mode: Set the database to single-user mode: sp_dboption <db_name>, 'single user', true.
+  Flush and Checkpoint: Run sp_flushstats and then checkpoint to ensure all pages are written to disk.  
+    Note: sp_flushstats is used to manually move table and index statistics from in-memory storage to the permanent system tables, systabstats and sysstatistics  
+          sp_configure "sysstatistics flush interval"
+  Perform dbcc checkstorage and dump:
+    dbcc checkstorage (database_name) - Fast, High-level physical/allocation check. It verifies page allocation, Object Allocation Map (OAM) entries, pointer consistency, and text column chains.
+    Generate the full database dump file: dump database <db_name> to '<path_to_dump>'. 
+    BCP out of login and roles as backup to restore user permissions, copy interface file, configuration file and runserver file.
+
+2.  Setup on Linux (Target)
+    OS requirements: 
+      Sybase login for ownership, Allocate shared memory required like previou or more.
+      SAP strongly recommends disabling Transparent Huge Pages (THP) on Linux, as they can cause latency spikes and performance degradation in database workloads.
+      Check for latest linux patch requied as per sybase documentation of particular version.
+      Configure Environment: Adjust shared memory settings (e.g., kernel.shmmax) in /etc/sysctl.conf and install required 32-bit libraries if using 64-bit Linux.
+        Request for shared memory for sybase server minus the required by OS standard.
+        Check using ipcs -m , free g and sp_configure 'max memory', 'value multiple of 2k', sp_configure 'allocate max shared memory'
+        Create required filesystems for data, log and tempdbs
+      As SYBASE user install ASE binaries: Install the same version (or higher) of ASE on the Linux server and setup sybase environment.
+      Create Server and configure: Recreate the necessary database devices (data and log) and an empty database of at least the same size as the source.
+      Restore interface file and configuration file or atleast compare and set it to same on new configuration file and start server.
+     
+3. Execution and Conversion
+  Load Database: Transfer the dump file to Linux and execute: load database <db_name> from '<path_to_dump>' and set the database options.
+  Restore users and permission from previous using BCP IN.
+  Run sp_post_xpload: After the load, you must run sp_post_xpload to rebuild indexes and system objects that were affected by the endian change.
+    sp_post_xpload can take an extremely long time because it processes indexes sequentially.
+    Increase Parallel Degree: Set the 'max utility parallel degree' to its maximum (255) to allow ASE to consume all available resources for index rebuilding, 
+                                                                        again can be increased to a value equal to sp_configure 'number of worker processes'.
+    Expand Sort Buffers: Increase the 'number of sort buffers' to speed up the index creation process. sp_configure 'number of sort buffers'
+    Procedure Cache: Boost the procedure cache size. Large index sorts require substantial procedure cache to avoid paging.
+    Large I/O: Configure the cache with 16K or 32K I/O pools to speed up sequential scans during the index rebuild process.
+    Asynchronous I/O: Ensure asynchronous I/O is enabled at the OS level on Linux to reduce wait times during heavy write operations.
+      [sybase@mongopri install]$ cat /proc/sys/fs/aio-max-nr
+      65536
+      [sybase@mongopri install]$ cat /proc/sys/fs/aio-nr
+      1025
+      sp_configure "disk i/o structures",65536
+  Online Database: Bring the database online: online database <db_name>. 
+
+4. Post-Migration Validation
+  Ensure you run the specific 16.0 scripts after the conversion to stabilize the system:
+  Recompile Procedures: Use dbcc upgrade_object to recompile all stored procedures, triggers, and views from their source text in syscomments.
+  Update Statistics: Immediately follow the migration with update statistics on all tables to ensure the query optimizer has accurate data for the new platform.
