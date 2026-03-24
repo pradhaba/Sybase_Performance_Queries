@@ -93,3 +93,65 @@ Step 13: Now, finally check the replication status and it should be Active/Activ
       Run this on replication server PROD_RS
       admin logical_status,LS_PROD_ASE.LD_DB
 Step 14: Test Replication
+
+b) Tune the DSI to the active connection
+suspend connection to "MIGA"."rbgdms"
+go
+configure connection to "MIGA"."rbgdms" set dsi_cmd_batch_size to '32768'
+go
+configure connection to "MIGA"."rbgdms" set dsi_keep_triggers to 'off'
+go
+configure connection to "MIGA"."rbgdms" set dsi_xact_group_size to '261424'
+go
+configure connection to "MIGA"."rbgdms" set dsi_max_xacts_in_group to '60'
+go
+configure connection to "MIGA"."rbgdms" set db_packet_size to '8192'
+go
+configure connection to "MIGA"."rbgdms" set dsi_commit_control to 'on'
+go
+configure connection to "MIGA"."rbgdms" set exec_cmds_per_timeslice to '10000'
+go
+configure connection to "MIGA"."rbgdms" set exec_sqm_write_request_limit to "1048576"
+go
+configure connection to "MIGA"."rbgdms" set md_sqm_write_request_limit to "1048576"
+go
+resume connection to "MIGA"."rbgdms"
+go
+============================================================================================
+c) Tune the DSI to the standby connection 
+suspend connection to "MIGB"."rbgdms"
+go
+configure connection to "MIGB"."rbgdms" set dsi_cmd_batch_size to '32768'
+go
+configure connection to "MIGB"."rbgdms" set dsi_keep_triggers to 'off'
+go
+configure connection to "MIGB"."rbgdms" set dsi_xact_group_size to '261424'
+go
+configure connection to "MIGB"."rbgdms" set dsi_max_xacts_in_group to '60'
+go
+configure connection to "MIGB"."rbgdms" set db_packet_size to '8192'
+go
+configure connection to "MIGB"."rbgdms" set dsi_commit_control to 'on'
+go
+configure connection to "MIGB"."rbgdms" set exec_cmds_per_timeslice to '10000'
+go
+configure connection to "MIGB"."rbgdms" set exec_sqm_write_request_limit to "1048576"
+go
+configure connection to "MIGB"."rbgdms" set md_sqm_write_request_limit to "1048576"
+go
+resume connection to "MIGB"."rbgdms"
+go
+==============================================================================================
+d) Change the error class for Active and Standby connections
+suspend connection to MIGA.rbgdms
+go
+alter connection to MIGA.rbgdms set error class error_class_17460
+go
+resume connection to MIGA.rbgdms
+go
+suspend connection to MIG.rbgdms
+go
+alter connection to MIGB.rbgdms set error class error_class_17460
+go
+resume connection to MIGB.rbgdms
+go
