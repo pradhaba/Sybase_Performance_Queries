@@ -1,4 +1,4 @@
-Pre-requisite:
+Setting up SYBASE ASE WarmStandby Pre-requisite:
 
 Sybase Primary server.database:PROD_ASE.DB (version 15.7)
 Sybase Seconday server.database:DR_ASE.DB (version 15.7)
