@@ -55,7 +55,7 @@ Step-by-Step Migration (XPDL Method)
     OS requirements: 
       Sybase login for ownership, Allocate shared memory required like previou or more.
       SAP strongly recommends disabling Transparent Huge Pages (THP) on Linux, as they can cause latency spikes and performance degradation in database workloads.
-      Check for latest linux patch requied as per sybase documentation of particular version.
+      Check for latest linux patch requied as per sybase documentation of particular version, i.e. yum check-update (or dnf check-update) — Lists all available updates without installing them.
       Configure Environment: Adjust shared memory settings (e.g., kernel.shmmax) in /etc/sysctl.conf and install required 32-bit libraries if using 64-bit Linux.
         Request for shared memory for sybase server minus the required by OS standard.
         Check using ipcs -m , free g and sp_configure 'max memory', 'value multiple of 2k', sp_configure 'allocate max shared memory'
