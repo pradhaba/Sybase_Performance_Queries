@@ -1,0 +1,12 @@
+Error 701 (insufficient procedure cache):
+dbcc proc_cache(free_unused)
+go
+dbcc purgesqlcache: Used to clear the statement cache, which is the specific part of the procedure cache that holds ad hoc SQL statements.
+dbcc cachedataremove: Used to clear pages from a data cache rather than the procedure cache.
+-- Monitors all caches for 5 minutes
+sp_sysmon "00:05:00", dcache
+-- Check top 10 spinlocks by 'Spins'
+select top 10 SpinlockName, Grabs, Spins, Waits,
+  Contention = convert(numeric(5,2), (100.0 * Waits) / nullif(Grabs, 0))
+from master..monSpinlockActivity
+order by Spins desc
